@@ -31,7 +31,8 @@ def setup_args(data_args, raw_datadict):
     dataset_key = list(raw_datadict.keys())[0]  # at least one data file exists
     column_names = raw_datadict[dataset_key].column_names
 
-    data_args.context_column = "context"
+    data_args.context_column = "question" if (
+        "question" in column_names) else "context"
     data_args.choice_columns = [
         c for c in column_names if c.startswith("choice")]
     data_args.label_column = "label"

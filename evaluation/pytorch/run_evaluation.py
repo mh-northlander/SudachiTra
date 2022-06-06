@@ -40,6 +40,12 @@ dataset_info = {
     "amazon": {"task": TaskType.CLASSIFICATION},
     "kuci": {"task": TaskType.MULTIPLE_CHOICE},
     "rcqa": {"task": TaskType.QA},
+    # JGLUE
+    "marc-ja": {"task": TaskType.CLASSIFICATION, "metric_name": "sst2"},
+    "jsts": {"task": TaskType.CLASSIFICATION, "metric_name": "stsb"},
+    "jnli": {"task": TaskType.CLASSIFICATION, "metric_name": "wnli"},
+    "jsquad": {"task": TaskType.QA},
+    "jcommonsenseqa": {"task": TaskType.MULTIPLE_CHOICE},
 }
 
 
@@ -86,12 +92,12 @@ class DataTrainingArguments:
         metadata={"help": "A root directory where dataset files locate."}
     )
     train_file: Optional[str] = field(
-        default=None, metadata={"help": "A csv file containing the training data. Overwrites dataset_dir."})
+        default=None, metadata={"help": "A csv/json file containing the training data. Overwrites dataset_dir."})
     validation_file: Optional[str] = field(
-        default=None, metadata={"help": "A csv file containing the validation data. Overwrites dataset_dir."}
+        default=None, metadata={"help": "A csv/json file containing the validation data. Overwrites dataset_dir."}
     )
     test_file: Optional[str] = field(
-        default=None, metadata={"help": "A csv file containing the test data. Overwrites dataset_dir."})
+        default=None, metadata={"help": "A csv/json file containing the test data. Overwrites dataset_dir."})
 
     dataset_name: Optional[str] = field(
         default=None, metadata={"help": "A identifier of dataset."}
@@ -99,6 +105,9 @@ class DataTrainingArguments:
     task_type: Optional[str] = field(
         default=None, metadata={"help": f"Task type of dataset. One of {[t.value for t in TaskType]}. "
                                 f"Inferred from dataset_name if not set."}
+    )
+    metric_name: Optional[str] = field(
+        default=None, metadata={"help": "An identifier of GLUE metric (classification only)."}
     )
 
     overwrite_cache: bool = field(
@@ -168,10 +177,16 @@ class DataTrainingArguments:
     )
 
     def __post_init__(self):
-        # set tasktype
-        dataset_name = self.dataset_name.lower()
-        if dataset_name in dataset_info:
-            self.task_type = dataset_info[dataset_name]["task"]
+        # set dataset info
+        if self.dataset_name is not None:
+            dsinfo = dataset_info.get(self.dataset_name.lower(), None)
+            if dsinfo is not None:
+                self.task_type = dsinfo["task"]
+                self.metric_name = dsinfo.get(
+                    "metric_name", None)
+            else:
+                raise ValueError(
+                    f"dataset_name passed ({self.dataset_name}) is not implemented.")
         else:
             if self.task_type is None:
                 raise ValueError(
@@ -379,9 +394,8 @@ def train_model(trainer, checkpoint):
 
 def evaluate_model(task_type, trainer, raw_dataset, dataset, data_args, output_dir, stage="test"):
     if task_type == TaskType.CLASSIFICATION:
-        label2id = data_args.label2id
         return classification_utils.evaluate_model(
-            trainer, dataset, label2id, output_dir, stage=stage)
+            trainer, dataset, data_args, output_dir, stage=stage)
 
     elif task_type == TaskType.MULTIPLE_CHOICE:
         return multiple_choice_utils.evaluate_model(
@@ -404,10 +418,6 @@ def main():
         logger.info(f"dataset_names implemented:")
         for nm in dataset_info:
             logger.info(f"{nm}")
-        return
-    if data_args.dataset_name.lower() not in dataset_info:
-        logger.error(f"dataset_name passed ({data_args.dataset_name}) is not implemented. "
-                     f"It must be one of {list(dataset_info.keys())} or \"list\".")
         return
 
     set_seed(training_args.seed)
