@@ -29,8 +29,8 @@ def setup_args(data_args, raw_datadict):
 
     data_args.label_list = sorted(label_list)  # sort for determinism
     data_args.is_regression = (data_args.metric_name == "stsb")
-    data_args.label2id = {l: i for i, l in enumerate(
-        label_list)} if not data_args.is_regression else None
+    data_args.num_labels = 1 if data_args.is_regression else len(data_args.label_list)
+    data_args.label2id = None if data_args.is_regression else {l: i for i, l in enumerate(label_list)} 
 
     data_columns = [
         c for c in raw_datadict[dataset_key].column_names if c != "label"]
@@ -67,9 +67,12 @@ def preprocess_dataset(raw_datadict, data_args, tokenizer, max_length):
                            max_length=max_length, truncation=True)
 
         # Map labels to ids
-        if "label" in examples and data_args.label2id is not None:
-            result["label"] = [
-                (data_args.label2id[l] if l != -1 else -1) for l in examples["label"]]
+        if "label" in examples:
+            if data_args.label2id is not None:
+                result["label"] = [
+                    (data_args.label2id[l] if l != -1 else -1) for l in examples["label"]]
+            elif data_args.is_regression:
+                result["label"] = [float(v) for v in examples["label"]]
         return result
 
     datadict = raw_datadict.map(
@@ -85,8 +88,7 @@ def setup_config(config_name_or_path, data_args):
     config = AutoConfig.from_pretrained(
         config_name_or_path,
         finetuning_task=data_args.dataset_name,
-        num_labels=len(
-            data_args.label_list) if not data_args.is_regression else 1,
+        num_labels=data_args.num_labels,
     )
     # add label <-> id mapping
     if data_args.label2id is not None:

@@ -89,7 +89,7 @@ class DataTrainingArguments:
     """
 
     dataset_dir: Optional[str] = field(
-        metadata={"help": "A root directory where dataset files locate."}
+        default=None, metadata={"help": "A root directory where dataset files locate."}
     )
     train_file: Optional[str] = field(
         default=None, metadata={"help": "A csv/json file containing the training data. Overwrites dataset_dir."})
@@ -209,12 +209,12 @@ class DataTrainingArguments:
 
         # check extension of data files
         extensions = {
-            self.train_file.suffix.lower() if self.train_file is not None else None,
-            self.validation_file.suffix.lower() if self.validation_file is not None else None,
-            self.test_file.suffix.lower() if self.test_file is not None else None,
+            Path(f).suffix.lower()
+            for f in [self.train_file, self.validation_file, self.test_file]
+            if f is not None
         }
-        extensions.discard(None)
-        assert len(extensions) == 1, "All input files should have same extension."
+        assert len(
+            extensions) == 1, f"All input files should have same extension (detect {extensions})."
         ext = extensions.pop()[1:]
         assert ext in ["csv", "json"], "data file should be csv or json."
         self.input_file_extension = ext
@@ -439,6 +439,10 @@ def main():
         task_type, raw_datadict, model_args, data_args)
     datadict = preprocess_dataset(
         task_type, raw_datadict, data_args, tokenizer)
+
+    if training_args.do_train:
+        for i in range(3):
+            logger.info(f'sample {i}: {datadict["train"][i]}')
 
     trainer = setup_trainer(task_type, model_args, data_args,
                             training_args, raw_datadict, datadict, tokenizer)
