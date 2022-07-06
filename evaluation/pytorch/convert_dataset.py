@@ -1,4 +1,5 @@
 import argparse as ap
+import json
 import logging
 import sys
 from collections import defaultdict as ddict
@@ -50,6 +51,43 @@ def convert_amazon(args):
     datadict = normalize_texts(datadict, text_columns, args.word_form)
     datadict = tokenize_texts(datadict, text_columns,
                               args.tokenizer, args.dicdir, args.mecabrc)
+    return datadict
+
+
+def convert_jsquad(args):
+    # convert JSQuAD (https://github.com/yahoojapan/JGLUE#jsquad)
+    # modify original data json into HF squad_v2 format
+
+    if args.dataset_dir_or_file is None:
+        raise ValueError(f"Provide the raw data directory with --input option. "
+                         f"Download it first (https://github.com/yahoojapan/JGLUE).")
+    dataset_dir = Path(args.dataset_dir_or_file)
+    if not dataset_dir.exists():
+        raise ValueError(f"{dataset_dir} does not exists.")
+    if dataset_dir.is_file():
+        raise ValueError(
+            f"Provide jsquad data directory instead of a file: {dataset_dir}.")
+
+    datafiles = dataset_dir.glob("*.json")
+
+    def iter_data(path):
+        with path.open() as fin:
+            raw = json.load(fin)
+        for d in raw["data"]:
+            for p in d["paragraphs"]:
+                for qa in p["qas"]:
+                    yield {
+                        "id": qa["id"],
+                        # "title": d["title"],
+                        "context": p["context"],
+                        "question": qa["question"],
+                        "answers": dictlist2listdict(qa["answers"]),
+                    }
+
+    datadict = DatasetDict({
+        f"{p.stem}": Dataset.from_dict(dictlist2listdict(list(iter_data(p))))
+        for p in datafiles
+    })
     return datadict
 
 
@@ -348,6 +386,12 @@ def split_dataset(dataset: Dataset, split_rate_str: str = None):
     return datadict
 
 
+def dictlist2listdict(dl):
+    if len(dl) == 0:
+        return {}
+    return {k: [d[k] for d in dl] for k in dl[0].keys()}
+
+
 def construct_output_filepath(output_dir: Path, filename: str, output_format: str):
     return output_dir / f"{filename}.{output_format}"
 
@@ -356,10 +400,7 @@ def save_datasets(datadict, output_dir, output_format):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for key in ("train", "dev", "test"):
-        if key not in datadict:
-            continue
-
+    for key in datadict:
         out_file = construct_output_filepath(output_dir, key, output_format)
         if output_format == "csv":
             datadict[key].to_csv(out_file, index=False)
@@ -373,6 +414,7 @@ CONVERT_FUNCS = {
     "amazon": convert_amazon,
     "kuci": convert_kuci,
     "rcqa": convert_rcqa,
+    "jsquad": convert_jsquad,
 }
 TOKENIZER_NAMES = ["juman", "mecab"]
 OUTPUT_FORMATS = ["csv", "json"]
