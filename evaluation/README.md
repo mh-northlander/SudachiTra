@@ -39,6 +39,34 @@ python convert_dataset.py amazon --output ./datasets/amazon
 python summary_results.py amazon ./out/chitra_surface_amazon/ --output ./summary.csv
 ```
 
+## JGLUE
+
+There are scripts to run [JGLUE](https://github.com/yahoojapan/JGLUE) tasks.
+
+### Run (following JGLUE way)
+
+JGLUE provides [a patch for transformers library](https://github.com/yahoojapan/JGLUE/tree/main/fine-tuning).
+However, it assumes to use `BertJapaneseTokenizer` and cannot work with chitra.
+
+We provide a updated patch (for chiTra model) in `jglue` directory.
+Follow JGLUE instructions using this patch instead of theirs.
+
+Note:
+
+- Our patch is made with transformers-v4.23.0.
+- You will also need to `pip install sudachitra`.
+
+### Run (using our script)
+
+Our `pytorch/run_evaluation.py` is also prepared to run JGLUE tasks.
+Use it in the same way (see downstream task section) with each JGLUE task names.
+
+Note:
+
+- JSQuAD data is formatted like SQuAD v1. You need to preprocess it using `convert_dataset.py`.
+  - `python convert_dataset.py jsquad -i path/to/jsquad -o path/to/output`
+- The evaluation metric we use for QA task is different from the one of JGLUE - JSQuAD.
+
 ## Robustness to the text normalization
 
 Run evaluation with test data whose texts are normalized.
